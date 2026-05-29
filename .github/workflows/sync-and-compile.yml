@@ -54,14 +54,23 @@ jobs:
     steps:
     - name: Determine Target Tag
       id: target
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Passiamo il token nativo di GitHub Actions
       run: |
-        # Se avviato manualmente e non c'è un nuovo tag rilevato, usa l'ultimo disponibile
         if [ "${{ needs.check-and-sync.outputs.new_tag }}" != "" ]; then
           echo "tag=${{ needs.check-and-sync.outputs.new_tag }}" >> $GITHUB_OUTPUT
         else
-          # Fallback manuale: interroga l'API di GitHub per l'ultima release di Cork
-          LATEST=$(curl -s https://api.github.com/repos/buresdv/Cork/releases/latest | jq -r .tag_name)
+          echo "⚠️ Nessun nuovo tag rilevato da check-and-sync. Recupero l'ultimo tag ufficiale..."
+          # Utilizziamo la GitHub CLI (gh) che è già autenticata e non soffre di rate-limiting
+          LATEST=$(gh api repos/buresdv/Cork/releases/latest --jq '.tag_name')
+          
+          if [ -z "$LATEST" ] || [ "$LATEST" = "null" ]; then
+            echo "❌ Errore critico: Impossibile recuperare il tag da GitHub API."
+            exit 1
+          fi
+          
           echo "tag=$LATEST" >> $GITHUB_OUTPUT
+          echo "📌 Tag determinato per il build: $LATEST"
         fi
 
     - name: Checkout Specific Tag
