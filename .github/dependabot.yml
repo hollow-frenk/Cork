@@ -4,3 +4,5 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly" # Controlla gli aggiornamenti ogni settimana
+      ignore:
+      - dependency-name: "jdx/mise-action"
