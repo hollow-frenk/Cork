@@ -45,10 +45,9 @@ jobs:
           echo "should_build=true" >> $GITHUB_OUTPUT
           echo "new_tag=$LATEST_UPSTREAM_TAG" >> $GITHUB_OUTPUT
         fi
-
   build:
     needs: check-and-sync
-    if: needs: check-and-sync.outputs.should_build == 'true' || github.event_name == 'workflow_dispatch'
+    if: ${{ needs.check-and-sync.outputs.should_build == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: macos-14
 
     steps:
