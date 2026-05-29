@@ -1,0 +1,113 @@
+name: Sync Fork and Compile Release
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Controlla automaticamente ogni giorno a mezzanotte
+  workflow_dispatch: # Ti permette di forzare il controllo e la compilazione manualmente
+
+jobs:
+  check-and-sync:
+    runs-on: ubuntu-latest
+    outputs:
+      new_tag: ${{ steps.sync.outputs.new_tag }}
+      should_build: ${{ steps.sync.outputs.should_build }}
+    steps:
+    - name: Checkout Fork
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Sync with Upstream Tags
+      id: sync
+      run: |
+        # Configura la repo madre come "upstream"
+        git remote add upstream https://github.com/buresdv/Cork.git
+        git fetch upstream --tags
+
+        # Prendi l'ultimo tag della repo madre e l'ultimo del tuo fork
+        UPSTREAM_TAG=$(git tag -l --sort=-v:refname | head -n 1) # Questo in realtà legge i tag locali dopo il fetch
+        # Per sicurezza prendiamo il tag più recente da upstream in modo esplicito
+        git fetch upstream refs/tags/*:refs/tags/*
+        LATEST_UPSTREAM_TAG=$(git describe --tags $(git rev-list --tags --max-count=1 upstream/main 2>/dev/null || git rev-parse upstream/main))
+        
+        echo "Ultima release ufficiale: $LATEST_UPSTREAM_TAG"
+
+        # Verifica se il tuo fork ha già questo tag internamente
+        if git rev-parse "$LATEST_UPSTREAM_TAG" >/dev/null 2>&1; then
+          echo "Il fork è già aggiornato all'ultima release."
+          echo "should_build=false" >> $GITHUB_OUTPUT
+        else
+          echo "Nuova release rilevata! Sincronizzazione in corso..."
+          # Push del nuovo tag nel tuo fork per tenerlo sincronizzato
+          git push origin "$LATEST_UPSTREAM_TAG"
+          
+          echo "should_build=true" >> $GITHUB_OUTPUT
+          echo "new_tag=$LATEST_UPSTREAM_TAG" >> $GITHUB_OUTPUT
+        fi
+
+  build:
+    needs: check-and-sync
+    if: needs: check-and-sync.outputs.should_build == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: macos-14
+
+    steps:
+    - name: Determine Target Tag
+      id: target
+      run: |
+        # Se avviato manualmente e non c'è un nuovo tag rilevato, usa l'ultimo disponibile
+        if [ "${{ needs.check-and-sync.outputs.new_tag }}" != "" ]; then
+          echo "tag=${{ needs.check-and-sync.outputs.new_tag }}" >> $GITHUB_OUTPUT
+        else
+          # Fallback manuale: interroga l'API di GitHub per l'ultima release di Cork
+          LATEST=$(curl -s https://api.github.com/repos/buresdv/Cork/releases/latest | jq -r .tag_name)
+          echo "tag=$LATEST" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Checkout Specific Tag
+      uses: actions/checkout@v4
+      with:
+        repository: 'buresdv/Cork'
+        ref: ${{ steps.target.outputs.tag }} # Compila ESATTAMENTE il codice della release
+
+    - name: Set up Homebrew
+      uses: Homebrew/actions/setup-homebrew@master
+
+    - name: Install Mise
+      run: |
+        curl https://mise.run | sh
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+    - name: Install Tuist and Generate Project
+      run: |
+        export MISE_TRUSTED_CONFIG_IDS=1
+        mise install tuist
+        
+        # Estraiamo la versione di tuist richiesta dal tag corrente (evita hardcode se cambia in futuro)
+        TUIST_VERSION=$(config_version=$(grep 'tuist =' .mise.toml 2>/dev/null | awk -F '"' '{print $2}'); echo ${config_version:-4.50.2})
+        
+        mise exec tuist@$TUIST_VERSION -- tuist install
+        mise exec tuist@$TUIST_VERSION -- tuist generate --no-binary-cache
+
+    - name: Build and Archive App
+      run: |
+        xcodebuild archive \
+          -project Cork.xcodeproj \
+          -scheme "Self-Compiled" \
+          -archivePath ./build/Cork.xcarchive \
+          CODE_SIGNING_ALLOWED=YES \
+          CODE_SIGNING_REQUIRED=YES \
+          CODE_SIGN_IDENTITY="-" \
+          PROVISIONING_PROFILE_SPECIFIER="" \
+          DEVELOPMENT_TEAM=""
+
+    - name: Export App from Archive
+      run: |
+        mkdir -p ./exported-app
+        cp -R ./build/Cork.xcarchive/Products/Applications/Cork.app ./exported-app/Cork.app
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Cork-${{ steps.target.outputs.tag }}-Self-Compiled
+        path: ./exported-app/Cork.app
