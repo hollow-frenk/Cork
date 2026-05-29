@@ -4,7 +4,8 @@ on:
   schedule:
     - cron: '0 0 * * *' # Controlla automaticamente ogni giorno a mezzanotte
   workflow_dispatch: # Ti permette di forzare il controllo e la compilazione manualmente
-
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 jobs:
   check-and-sync:
     runs-on: ubuntu-latest
@@ -48,7 +49,7 @@ jobs:
   build:
     needs: check-and-sync
     if: ${{ needs.check-and-sync.outputs.should_build == 'true' || github.event_name == 'workflow_dispatch' }}
-    runs-on: macos-14
+    runs-on: macos-26
 
     steps:
     - name: Determine Target Tag
@@ -70,7 +71,7 @@ jobs:
         ref: ${{ steps.target.outputs.tag }} # Compila ESATTAMENTE il codice della release
 
     - name: Set up Homebrew
-      uses: Homebrew/actions/setup-homebrew@master
+      uses: Homebrew/actions/setup-homebrew@main
 
     - name: Install Mise
       run: |
