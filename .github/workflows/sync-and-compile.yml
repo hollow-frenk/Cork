@@ -88,22 +88,31 @@ jobs:
         echo "$HOME/.local/bin" >> $GITHUB_PATH
 
     - name: Install Tuist and Generate Project
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Fornisce il token a Mise per evitare il rate-limiting delle API
       run: |
         export MISE_TRUSTED_CONFIG_IDS=1
         mise install tuist
         
-        # Estraiamo la versione di tuist richiesta dal tag corrente (evita hardcode se cambia in futuro)
+        # Estrae dinamicamente la versione di tuist richiesta dal file .mise.toml
         TUIST_VERSION=$(config_version=$(grep 'tuist =' .mise.toml 2>/dev/null | awk -F '"' '{print $2}'); echo ${config_version:-4.50.2})
         
+        # Eseguiamo l'installazione delle dipendenze
         mise exec tuist@$TUIST_VERSION -- tuist install
-        mise exec tuist@$TUIST_VERSION -- tuist generate --no-binary-cache
+        
+        # Sostituito il flag deprecato con il nuovo parametro ufficiale richiesto da Tuist 4.x
+        mise exec tuist@$TUIST_VERSION -- tuist generate --cache-profile none
 
     - name: Build and Archive App
       run: |
+        # Usiamo -workspace al posto di -project per allinearci a quanto generato da Tuist
+        # Aggiungiamo -skipPackagePluginValidation per approvare automaticamente SwiftLint
+        
         xcodebuild archive \
-          -project Cork.xcodeproj \
+          -workspace Cork.xcworkspace \
           -scheme "Self-Compiled" \
           -archivePath ./build/Cork.xcarchive \
+          -skipPackagePluginValidation \
           CODE_SIGNING_ALLOWED=YES \
           CODE_SIGNING_REQUIRED=YES \
           CODE_SIGN_IDENTITY="-" \
