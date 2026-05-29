@@ -119,13 +119,17 @@ jobs:
           PROVISIONING_PROFILE_SPECIFIER="" \
           DEVELOPMENT_TEAM=""
 
-    - name: Export App from Archive
+    - name: Compress App Bundle
       run: |
-        mkdir -p ./exported-app
-        cp -R ./build/Cork.xcarchive/Products/Applications/Cork.app ./exported-app/Cork.app
+        # Ci spostiamo nella directory dove xcodebuild ha depositato l'app compilata
+        cd ./build/Cork.xcarchive/Products/Applications/
+        
+        # Creiamo un archivio zip preservando l'estensione .app e i permessi nativi
+        zip -r -X ../../../../Cork-Compiled.zip Cork.app
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: Cork-${{ steps.target.outputs.tag }}-Self-Compiled
-        path: ./exported-app/Cork.app
+        # Carichiamo il file zip già compresso, evitando che GitHub Actions smantelli il pacchetto .app
+        path: ./Cork-Compiled.zip
