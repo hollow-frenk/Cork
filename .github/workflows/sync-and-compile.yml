@@ -81,6 +81,12 @@ jobs:
 
     - name: Set up Homebrew
       uses: Homebrew/actions/setup-homebrew@main
+      
+    - name: Trust pre-installed Homebrew Taps
+      run: |
+        brew trust aws/tap || true
+        brew trust azure/bicep || true
+        brew trust hashicorp/tap || true
 
     - name: Install Mise
       run: |
