@@ -14,7 +14,7 @@ jobs:
       should_build: ${{ steps.sync.outputs.should_build }}
     steps:
     - name: Checkout Fork
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         fetch-depth: 0
         token: ${{ secrets.GITHUB_TOKEN }}
@@ -74,7 +74,7 @@ jobs:
         fi
 
     - name: Checkout Specific Tag
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         repository: 'buresdv/Cork'
         ref: ${{ steps.target.outputs.tag }} # Compila ESATTAMENTE il codice della release
