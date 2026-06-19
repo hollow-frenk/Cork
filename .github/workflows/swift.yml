@@ -10,7 +10,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - run: brew install homebrew/cask/swift swiftlint
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - run: swiftlint --version
       - run: swiftlint --fix --quiet && git diff
       - run: swiftlint --quiet | tee swiftlint.out.txt
